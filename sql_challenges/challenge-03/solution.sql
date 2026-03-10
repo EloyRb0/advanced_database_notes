@@ -1,5 +1,4 @@
 --Lesson 10--
---Corrected PR--
 SELECT MAX(years_employed) as Max_years_employed
 FROM employees;
 SELECT role, AVG(years_employed) as Average_years_employed
