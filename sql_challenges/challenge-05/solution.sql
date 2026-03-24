@@ -45,7 +45,6 @@ CREATE OR REPLACE TRIGGER trg_pet_care_delete
 BEFORE DELETE ON PET_CARE_LOG
 FOR EACH ROW
 BEGIN
-    -- Check if the current user is JOEMANAGER
     IF USER != 'JOEMANAGER' THEN
         RAISE_APPLICATION_ERROR(-20004, 'Delete failed: Only the manager (JOEMANAGER) is authorized to delete records.');
     END IF;
