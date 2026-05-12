@@ -1,1 +1,1 @@
-no notes needed
+no notes needed for the activity
