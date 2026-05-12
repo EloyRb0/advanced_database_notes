@@ -1,195 +1,103 @@
---Union, Minus, and Intersect: Databases for Developers--
---I included all the queries run in the tutorial/activity, so it may not run properly on its own--
+--Trigger Functions-
+--ADDED UPDATE_DATE and UPDATED_BY_USER to table PET_CARE_LOG--
 
-create table my_brick_collection (
-colour varchar2(10),
-shape  varchar2(10),
-weight integer
+--CREATE TABLES--
+CREATE TABLE PET_CARE_LOG (
+    PRODUCT_ID NUMBER,
+    LOG_DATETIME TIMESTAMP,
+    CARE_INSTRUCTIONS VARCHAR2(1000),
+    UPDATE_DATE DATE,              
+    UPDATED_BY_USER VARCHAR2(100), 
+    PRIMARY KEY (PRODUCT_ID, LOG_DATETIME),
+    CONSTRAINT fk_petcare_product FOREIGN KEY (PRODUCT_ID) REFERENCES PRODUCT(PRODUCT_ID)
 );
 
-drop table your_brick_collation cascade constraints;
-create table your_brick_collection (
-  height integer,
-  width  integer,
-  depth  integer,
-  colour varchar2(10),
-  shape  varchar2(10)
+CREATE TABLE SALE_ITEM (
+    SALES_ID NUMBER,
+    PRODUCT_ID NUMBER,
+    QUANTITY NUMBER DEFAULT 1,
+    PRIMARY KEY (SALES_ID, PRODUCT_ID),
+    CONSTRAINT fk_saleitem_sale FOREIGN KEY (SALES_ID) REFERENCES CUSTOMER_SALE(SALES_ID),
+    CONSTRAINT fk_saleitem_product FOREIGN KEY (PRODUCT_ID) REFERENCES PRODUCT(PRODUCT_ID)
 );
 
-insert into my_brick_collection values ( 'red', 'cube', 10 );
-insert into my_brick_collection values ( 'blue', 'cuboid', 8 );
-insert into my_brick_collection values ( 'green', 'pyramid', 20 );
-insert into my_brick_collection values ( 'green', 'pyramid', 20 );
-insert into my_brick_collection values ( null, 'cuboid', 20 );
-
-insert into your_brick_collection values ( 2, 2, 2, 'red', 'cube' );
-insert into your_brick_collection values ( 2, 2, 2, 'blue', 'cube' );
-insert into your_brick_collection values ( 2, 2, 8, null, 'cuboid' );
-
-commit;
-
-
-select * from my_brick_collection;
-
-select * from your_brick_collection;
-
-
-
-select colour, shape from my_brick_collection
-union
-select colour, shape from your_brick_collection;
-
-select distinct * from my_brick_collection;
-select distinct shape from your_brick_collection;
-
-select colour, shape from my_brick_collection
-union all
-select colour, shape from your_brick_collection;
-
-select distinct * from (
-  select colour, shape from my_brick_collection
-  union all
-  select colour, shape from your_brick_collection
+CREATE TABLE CUSTOMER_SALE (
+    SALES_ID NUMBER PRIMARY KEY,
+    CUST_ID NUMBER NOT NULL,
+    SALE_DATE DATE DEFAULT SYSDATE,
+    CONSTRAINT fk_sale_customer FOREIGN KEY (CUST_ID) REFERENCES CUSTOMER(CUST_ID)
 );
 
---TRY IT-------------------------------
-select colour from my_brick_collection
-UNION
-select colour from your_brick_collection
-order by colour;
+CREATE TABLE PRODUCT (
+    PRODUCT_ID NUMBER PRIMARY KEY,
+    PRODUCT_NAME VARCHAR2(100),
+    PRODUCT_DESCRIPTION VARCHAR2(255),
+    PARENT_PRODUCT_ID NUMBER, 
+    CONSTRAINT fk_product_package FOREIGN KEY (PARENT_PRODUCT_ID) REFERENCES PRODUCT(PRODUCT_ID)
+);
 
-select shape from my_brick_collection
-UNION ALL
-select shape from your_brick_collection
-order by shape;
----------------------------------------
-
-select colour, shape from your_brick_collection ybc
-where  not exists (
-  select null from my_brick_collection mbc
-  where  ybc.colour = mbc.colour
-  and    ybc.shape = mbc.shape
+CREATE TABLE CUSTOMER (
+    CUST_ID NUMBER PRIMARY KEY,
+    CUSTOMER_NAME VARCHAR2(100),
+    ADDRESS VARCHAR2(255)
 );
 
 
-select colour, shape from your_brick_collection ybc
-where  not exists (
-  select null from my_brick_collection mbc
-  where  ( ybc.colour = mbc.colour or
-    ( ybc.colour is null and mbc.colour is null )
-  )
-  and    ( ybc.shape = mbc.shape or
-    ( ybc.shape is null and mbc.shape is null )
-  )
-);
 
-select colour, shape from your_brick_collection
-minus
-select colour, shape from my_brick_collection;
+--INSERT TRIGGER--
 
+CREATE OR REPLACE TRIGGER trg_pet_care_insert
+BEFORE INSERT ON PET_CARE_LOG
+FOR EACH ROW
+BEGIN
+    :NEW.UPDATE_DATE := SYSDATE;
+    :NEW.UPDATED_BY_USER := USER;
+    
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE_APPLICATION_ERROR(-20001, 'An error occurred during insert into PET_CARE_LOG: ' || SQLERRM);
+END;
+/
 
-select colour, shape from my_brick_collection
-minus
-select colour, shape from your_brick_collection
+--UPDATE TRIGGER--
 
-select colour, shape from my_brick_collection mbc
-where  not exists (
-  select null from your_brick_collection ybc
-  where  ( ybc.colour = mbc.colour or ( ybc.colour is null and mbc.colour is null ) )
-  and    ybc.shape = mbc.shape
-);
+CREATE OR REPLACE TRIGGER trg_pet_care_update
+BEFORE UPDATE ON PET_CARE_LOG
+FOR EACH ROW
+BEGIN
+    IF USER != :OLD.UPDATED_BY_USER THEN
+        RAISE_APPLICATION_ERROR(-20002, 'Update failed: You are only allowed to update records that you created.');
+    END IF;
 
-select colour, shape from your_brick_collection ybc
-where  exists (
-  select null from my_brick_collection mbc
-  where  ( ybc.colour = mbc.colour or ( ybc.colour is null and mbc.colour is null ) )
-  and    ybc.shape = mbc.shape
-);
+    :NEW.UPDATE_DATE := SYSDATE;
 
-select colour, shape from your_brick_collection
-intersect
-select colour, shape from my_brick_collection;
-
---------TRY IT-------------------------------
-select shape from my_brick_collection
-minus
-select shape from your_brick_collection;
-
-select colour from my_brick_collection
-INTERSECT
-select colour from your_brick_collection
-order  by colour;
-
-----------------------------------------------
-
-select colour, shape from your_brick_collection
-minus
-select colour, shape from my_brick_collection
-union all
-select colour, shape from my_brick_collection
-minus
-select colour, shape from your_brick_collection;
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLCODE NOT IN (-20002) 
+            RAISE_APPLICATION_ERROR(-20003, 'An error occurred during update on PET_CARE_LOG: ' || SQLERRM);
+        ELSE
+            RAISE; 
+        END IF;
+END;
+/
 
 
-select * from (
-  select colour, shape from your_brick_collection
-  minus
-  select colour, shape from my_brick_collection
-) union all (
-  select colour, shape from my_brick_collection
-  minus
-  select colour, shape from your_brick_collection
-);
+--DELETE TRIGGER--
 
+CREATE OR REPLACE TRIGGER trg_pet_care_delete
+BEFORE DELETE ON PET_CARE_LOG
+FOR EACH ROW
+BEGIN
+    IF USER != 'JOEMANAGER' THEN
+        RAISE_APPLICATION_ERROR(-20004, 'Delete failed: Only the manager (JOEMANAGER) is authorized to delete records.');
+    END IF;
 
-select * from (
-  select colour, shape from your_brick_collection
-  union all
-  select colour, shape from my_brick_collection
-) minus (
-  select colour, shape from my_brick_collection
-  intersect
-  select colour, shape from your_brick_collection
-);
-
-
-insert into your_brick_collection values ( 4, 4, 4, 'red', 'cube' );
-
-select * from (
-  select colour, shape from your_brick_collection
-  minus
-  select colour, shape from my_brick_collection
-) union all (
-  select colour, shape from my_brick_collection
-  minus
-  select colour, shape from your_brick_collection
-);
-
-
-select colour, shape, sum ( your_bricks ), sum ( my_bricks )
-from (
-  select colour, shape, 1 your_bricks, 0 my_bricks
-  from   your_brick_collection
-  union all
-  select colour, shape, 0 your_bricks, 1 my_bricks
-  from   my_brick_collection
-)
-group  by colour, shape
-having sum ( your_bricks ) <> sum ( my_bricks );
-
-
-select colour, shape,
-       case
-         when sum ( your_bricks ) < sum ( my_bricks ) then 'ME'
-         when sum ( your_bricks ) > sum ( my_bricks ) then 'YOU'
-         else 'EQUAL'
-       end who_has_extra,
-       abs ( sum ( your_bricks ) - sum ( my_bricks ) ) how_many
-from (
-  select colour, shape, 1 your_bricks, 0 my_bricks
-  from   your_brick_collection
-  union all
-  select colour, shape, 0 your_bricks, 1 my_bricks
-  from   my_brick_collection
-)
-group  by colour, shape;
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLCODE NOT IN (-20004) THEN
+            RAISE_APPLICATION_ERROR(-20005, 'An error occurred during delete on PET_CARE_LOG: ' || SQLERRM);
+        ELSE
+            RAISE; 
+        END IF;
+END;
+/
